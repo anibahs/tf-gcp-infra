@@ -5,14 +5,13 @@
 - Terraform
 - Google Cloud Platform
   
-<<<<<<< HEAD
 ## Enable API Service on Google Cloud Platform
 - Enable Compute Engine API to create Google Compute Netwrok resources
 
-## Setup
-- Edit terraform.tfvars
-- Run Terraform apply to dpeloy resources.
-=======
-## Enable API Service on the Google Cloud Platform
-- Enable Compute Engine API to create Google Compute Network resources
->>>>>>> 1629d08 (Update README.md)
+## Infrastructure deployment
+- Clone repository 
+- Setup and login to GCLI, as it sets up the credentials
+- Setup terraform.tfvars / pass variables through
+- Run terraform init, plan
+- Run Terraform apply to deploy resources.
+
