@@ -3,10 +3,19 @@ variable "gcp_region" {
   type        = string
   default     = "us-east1"
 }
+variable "gcp_zone" {
+  description = "GCP zone"
+  type        = string
+  default     = "us-east1-b"
+}
 variable "project_id" {
   description = "project_id"
   type        = string
-  default     = "anibahs-csye6225"
+  default     = "dev-csye6225-414718"
+}
+variable "routing_mode" {
+  type    = string
+  default = "REGIONAL"
 }
 
 variable "custom_vpc" {
@@ -20,7 +29,7 @@ variable "db_subnet" {
 
 variable "webapp_subnet" {
   type    = string
-  default = "webapp"
+  default = "webapp-subnet"
 }
 variable "network_route" {
   type    = string
@@ -39,4 +48,52 @@ variable "webapp_cidr" {
 variable "public_gateway" {
   type    = string
   default = "0.0.0.0/0"
+}
+
+variable "app_port" {
+  type    = string
+  default = "8080"
+}
+
+variable "image_id" {
+  type    = string
+  default = "centosstream8"
+}
+
+variable "disk_size" {
+  type    = number
+  default = 100
+}
+
+variable "disk_type" {
+  type    = string
+  default = "pd-balanced"
+}
+
+variable "server_name" {
+  type    = string
+  default = "webapp-cs8"
+}
+
+variable "machine_type" {
+  type    = string
+  default = "e2-medium"
+}
+
+variable "firewall-name" {
+  type    = string
+  default = "custom-firewall"
+}
+
+variable "network_tags" {
+  type    = string
+  default = "http-server"
+}
+variable "network_tier" {
+  type    = string
+  default = "STANDARD"
+}
+variable "network_stack" {
+  type    = string
+  default = "IPV4_ONLY"
 }
