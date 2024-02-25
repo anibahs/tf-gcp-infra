@@ -43,10 +43,12 @@ resource "google_compute_route" "network-route" {
 resource "google_compute_firewall" "default" {
   name        = var.firewall-name
   network     = google_compute_network.custom-vpc.name
-  source_tags = ["web"]
+  source_ranges = [var.public_gateway]
+  target_tags = [var.network_tags]
+
   allow {
     protocol = "tcp"
-    ports    = [var.app_port]
+    ports    = ["8080","80"]
   }
   depends_on = [google_compute_network.custom-vpc]
 }
