@@ -52,7 +52,7 @@ variable "public_gateway" {
 
 variable "app_port" {
   type    = string
-  default = "8080, 80"
+  default = "8080"
 }
 
 variable "public_port" {
