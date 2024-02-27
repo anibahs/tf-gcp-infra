@@ -7,6 +7,8 @@
   
 ## Enable API Service on Google Cloud Platform
 - Enable Compute Engine API to create Google Compute Netwrok resources
+- Service Networking API
+- Cloud DNS API
 
 ## Infrastructure deployment
 - Clone repository 

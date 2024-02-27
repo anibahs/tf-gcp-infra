@@ -24,7 +24,7 @@ variable "custom_vpc" {
 }
 variable "db_subnet" {
   type    = string
-  default = "db"
+  default = "db-subnet"
 }
 
 variable "webapp_subnet" {
@@ -96,4 +96,8 @@ variable "network_tier" {
 variable "network_stack" {
   type    = string
   default = "IPV4_ONLY"
+}
+variable "deletion_protection" {
+  type    = bool
+  default = false
 }
