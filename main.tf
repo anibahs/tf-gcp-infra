@@ -196,13 +196,19 @@ resource "google_compute_instance" "webapp-host" {
         #!/bin/bash
 
         set -e
-        # setup env file
-        sudo echo "HOST=${google_compute_address.endpoint_ip_addr.address}" > /opt/webapp/.env
-        sudo echo "DATABASE=${google_sql_database.database.name}" >> /opt/webapp/.env
-        sudo echo "USERNAME=${google_sql_user.db_user.name}" >> /opt/webapp/.env
-        sudo echo "PASSWORD=${google_sql_user.db_user.password}" >> /opt/webapp/.env
-        sudo echo "DIALECT=${var.db_dialect}" >> /opt/webapp/.env
-        sudo echo "DB_PORT=${var.db_port}" >> /opt/webapp/.env
+        if [ -f "/opt/webapp/.env" ]; then
+          echo "Env file exists:"
+          cat "/opt/webapp/.env"
+        else 
+          # setup env file
+          sudo echo "HOST=${google_compute_address.endpoint_ip_addr.address}" > /opt/webapp/.env
+          sudo echo "DATABASE=${google_sql_database.database.name}" >> /opt/webapp/.env
+          sudo echo "USERNAME=${google_sql_user.db_user.name}" >> /opt/webapp/.env
+          sudo echo "PASSWORD=${google_sql_user.db_user.password}" >> /opt/webapp/.env
+          sudo echo "DIALECT=${var.db_dialect}" >> /opt/webapp/.env
+          sudo echo "DB_PORT=${var.db_port}" >> /opt/webapp/.env
+          echo "Env file generated"
+        fi
 
         sudo /opt/webapp/packer/setup_service.sh
         EOT
