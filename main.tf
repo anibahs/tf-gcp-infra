@@ -198,7 +198,7 @@ resource "google_compute_instance" "webapp-host" {
         set -e
         if [ -f "/opt/webapp/.env" ]; then
           echo "Env file exists:"
-          cat "/opt/webapp/.env"
+          sudo cat "/opt/webapp/.env"
         else 
           # setup env file
           sudo echo "HOST=${google_compute_address.endpoint_ip_addr.address}" > /opt/webapp/.env
