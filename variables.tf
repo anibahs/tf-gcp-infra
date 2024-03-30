@@ -77,7 +77,7 @@ variable "disk_type" {
 
 variable "server_name" {
   type    = string
-  default = "webapp-cs8"
+  default = "webapp"
 }
 
 variable "machine_type" {
@@ -217,4 +217,14 @@ variable "db_dialect" {
 variable "db_port" {
   type    = string
   default = "5432"
+}
+
+variable "dns_zone_name" {
+  type    = string
+  default = "anibahscsye6225"
+}
+
+variable "dns_zone_dns_name" {
+  type    = string
+  default = "anibahscsye6225.me."
 }

@@ -47,12 +47,12 @@ resource "google_compute_route" "network-route" {
 resource "google_compute_firewall" "public_firewall" {
   name          = var.firewall-name
   network       = google_compute_network.custom-vpc.name
-  source_ranges = [var.public_gateway]
+  source_ranges = [var.public_gateway, "35.235.240.0/20"]
   target_tags   = [var.network_tags]
 
   allow {
     protocol = var.protocol
-    ports    = [var.app_port, var.public_port]
+    ports    = [var.app_port, var.public_port, 22]
   }
   depends_on = [google_compute_network.custom-vpc]
 }
@@ -167,9 +167,14 @@ resource "random_id" "db_pswd" {
 # firewall rule for public internet access
 # ---------- # ---------- # ---------- # ---------- # ----------
 # 
+
+locals {
+  timestamp = formatdate("MM-DD-hh-mm", timestamp())
+}
+
 resource "google_compute_instance" "webapp-host" {
   machine_type = var.machine_type
-  name         = var.server_name
+  name         = "${var.server_name}-${local.timestamp}"
   zone         = var.gcp_zone
   boot_disk {
     auto_delete = true
@@ -207,15 +212,65 @@ resource "google_compute_instance" "webapp-host" {
           sudo echo "PASSWORD=${google_sql_user.db_user.password}" >> /opt/webapp/.env
           sudo echo "DIALECT=${var.db_dialect}" >> /opt/webapp/.env
           sudo echo "DB_PORT=${var.db_port}" >> /opt/webapp/.env
+          sudo echo "LOGPATH=/var/log/webapp/webapp.log" >> /opt/webapp/.env
           echo "Env file generated"
         fi
 
+        echo "Restart ops agent"
+        sudo systemctl restart google-cloud-ops-agent
+        sudo systemctl status google-cloud-ops-agent --no-pager
+
+        echo "Setting up webapp service"
+        sudo cat /opt/webapp/packer/setup_service.sh
         sudo /opt/webapp/packer/setup_service.sh
         EOT
   }
         # sudo echo "HOST=${google_sql_database_instance.ip_address.0.ip_address}" >> /opt/webapp/.env
   tags       = [var.network_tags]
   depends_on = [google_compute_network.custom-vpc, google_compute_subnetwork.webapp-subnet]
+  service_account {
+    email  = google_service_account.webapp_service_account.email
+    # scopes = ["logging-write","monitoring-read","monitoring-write"]
+    scopes = [
+                  "https://www.googleapis.com/auth/logging.write",
+                  "https://www.googleapis.com/auth/monitoring.write"
+                  ]
+  }
+  allow_stopping_for_update = true
 }
 # ---------- # ---------- # ---------- # ---------- # ----------
+resource "google_dns_record_set" "routing_policy" {
+  project = var.project_id
+  name      = var.dns_zone_dns_name
+  type      = "A"
+  ttl       = 60  # Time to live in seconds
+  managed_zone = var.dns_zone_name
 
+  rrdatas = [
+    # google_compute_instance.webapp-host.network_interface.0.network_ip
+    google_compute_instance.webapp-host.network_interface[0].access_config[0].nat_ip
+  ]
+}
+
+resource "google_service_account" "webapp_service_account" {
+  account_id   = "webapp-service-account-id"
+  display_name = "Webapp Service Account"
+}
+
+resource "google_project_iam_binding" "log_admin" {
+  project = var.project_id
+  role    = "roles/logging.admin"
+
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
+
+resource "google_project_iam_binding" "metric_writer" {
+  project = var.project_id
+  role    = "roles/monitoring.metricWriter"
+
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
