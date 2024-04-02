@@ -228,3 +228,17 @@ variable "dns_zone_dns_name" {
   type    = string
   default = "anibahscsye6225.me."
 }
+variable "bucket_name" {
+  type    = string
+  default = "dev-csye6225-func-bucket"
+}
+
+variable "vpc_connector_name" {
+  type    = string
+  default = "custom-vpc-connector"
+}
+
+variable "ip_cidr_range" {
+  type    = string
+  default = "10.1.3.0/28"
+}

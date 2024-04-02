@@ -174,7 +174,8 @@ locals {
 
 resource "google_compute_instance" "webapp-host" {
   machine_type = var.machine_type
-  name         = "${var.server_name}-${local.timestamp}"
+  # name         = "${var.server_name}-${local.timestamp}"
+  name         = "${var.server_name}-cs8"
   zone         = var.gcp_zone
   boot_disk {
     auto_delete = true
@@ -273,4 +274,91 @@ resource "google_project_iam_binding" "metric_writer" {
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
   ]
+}
+
+# ---------- # ---------- # ---------- # ---------- # ----------
+# Infra setup for Pub/Sub
+# Includes pub sub topic, subscription, cloud function
+#
+# ---------- # ---------- # ---------- # ---------- # ----------
+resource "google_pubsub_topic" "trigger_email" {
+  name = "verify_email"
+  message_retention_duration = "604800s"
+}
+
+resource "google_pubsub_subscription" "check_user" {
+  name  = "check_user"
+  topic = google_pubsub_topic.trigger_email.id
+
+  message_retention_duration = "7200s"
+  retain_acked_messages      = true
+  ack_deadline_seconds = 20
+  retry_policy {
+    minimum_backoff = "10s"
+  }
+  enable_message_ordering    = false
+}
+
+
+# resource "random_id" "func_bucket_name" {
+#   byte_length = 8
+# }
+# resource "google_storage_bucket" "func_bucket" {
+#   # name     = "${random_id.func_bucket_name.hex}"
+#   name     = "dev-csye6225-func-bucket"
+#   location = "US"
+# }
+
+# resource "google_storage_bucket_object" "func_archive" {
+#   name   = "serverless.zip"
+#   bucket = var.bucket_name
+#   source = "serverless.zip"
+#   content_type = "application/zip"
+# }
+
+resource "google_cloudfunctions_function" "email_verification" {
+  name        = "email_verification"
+  description = "Email Verification"
+  runtime     = "nodejs20"
+
+  available_memory_mb   = 128
+  source_archive_bucket = var.bucket_name
+  source_archive_object = "serverless.zip"
+  event_trigger {
+    event_type = "google.pubsub.topic.publish"
+    resource= "projects/${var.project_id}/topics/${google_pubsub_topic.trigger_email.name}"
+  }
+  entry_point           = "sendEmail.js"
+}
+
+resource "google_cloudfunctions_function_iam_binding" "func_binding" {
+  project = google_cloudfunctions_function.email_verification.project
+  region = google_cloudfunctions_function.email_verification.region
+  cloud_function = google_cloudfunctions_function.email_verification.name
+  role = "roles/viewer"
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
+resource "google_pubsub_subscription_iam_binding" "pubsub_editor" {
+  subscription = google_pubsub_subscription.check_user.name
+  role         = "roles/editor"
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
+
+resource "google_pubsub_topic_iam_binding" "binding" {
+  project = google_pubsub_topic.trigger_email.project
+  topic = google_pubsub_topic.trigger_email.name
+  role = "roles/viewer"
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
+
+resource "google_vpc_access_connector" "cloud_function_connector" {
+  name          = var.vpc_connector_name
+  network       = google_compute_network.custom-vpc.self_link
+  ip_cidr_range = var.ip_cidr_range
 }
