@@ -228,6 +228,13 @@ variable "dns_zone_dns_name" {
   type    = string
   default = "anibahscsye6225.me."
 }
+
+variable "routing_policy_ttl" {
+  type    = number
+  default = 60
+}
+
+
 variable "bucket_name" {
   type    = string
   default = "dev-csye6225-func-bucket"
@@ -241,4 +248,116 @@ variable "vpc_connector_name" {
 variable "ip_cidr_range" {
   type    = string
   default = "10.1.3.0/28"
+}
+
+variable "api_key" {
+  type = string
+}
+
+variable "domain" {
+  type    = string
+  default = "anibahscsye6225.me"
+}
+
+variable "email_verification_name" {
+  type    = string
+  default = "email_verification"
+}
+
+
+variable "node_runtime" {
+  type    = string
+  default = "nodejs20"
+}
+
+variable "source_archive_object" {
+  type    = string
+  default = "serverless.zip"
+}
+
+variable "pubsub_trigger_event" {
+  type    = string
+  default = "google.pubsub.topic.publish"
+}
+
+variable "entry_point" {
+  type    = string
+  default = "sendEmail"
+}
+
+variable "cloud_function_timeout" {
+  type    = string
+  default = "60"
+}
+
+variable "viewer_role" {
+  type    = string
+  default = "roles/viewer"
+}
+
+variable "editor_role" {
+  type    = string
+  default = "roles/editor"
+}
+
+variable "pubsub_topic" {
+  type    = string
+  default = "verify_email"
+}
+
+variable "pubsub_topic_mrd" {
+  type    = string
+  default = "604800s"
+}
+
+variable "pubsub_subscription" {
+  type    = string
+  default = "check_user"
+}
+
+variable "pubsub_subscription_mrd" {
+  type    = string
+  default = "7200s"
+}
+
+variable "retain_acked" {
+  type    = bool
+  default = true
+}
+
+
+variable "ack_deadline" {
+  type    = number
+  default = 20
+}
+
+variable "retry_min" {
+  type    = string
+  default = "60s"
+}
+
+
+variable "message_ordering" {
+  type    = bool
+  default = false
+}
+
+variable "webapp_service_account_id" {
+  type    = string
+  default = "webapp-service-account-id"
+}
+
+variable "webapp_service_account_name" {
+  type    = string
+  default = "Webapp Service Account"
+}
+
+variable "iam_binding_logging" {
+  type    = string
+  default = "roles/logging.admin"
+}
+
+variable "iam_binding_metric" {
+  type    = string
+  default = "roles/monitoring.metricWriter"
 }

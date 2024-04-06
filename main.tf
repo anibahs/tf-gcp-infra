@@ -47,11 +47,13 @@ resource "google_compute_route" "network-route" {
 resource "google_compute_firewall" "public_firewall" {
   name          = var.firewall-name
   network       = google_compute_network.custom-vpc.name
+  # source_ranges = [var.public_gateway, "35.235.240.0/20"]
   source_ranges = [var.public_gateway]
   target_tags   = [var.network_tags]
 
   allow {
     protocol = var.protocol
+    # ports    = [var.app_port, var.public_port, 22]
     ports    = [var.app_port, var.public_port]
   }
   depends_on = [google_compute_network.custom-vpc]
@@ -83,9 +85,9 @@ resource "google_compute_address" "endpoint_ip_addr" { # and forwarding rule fro
 }
 
 resource "google_compute_forwarding_rule" "endpoint" {
-  project = google_compute_network.custom-vpc.project
-  name    = var.webapp_endpoint_fwd_rule
-  target  = google_sql_database_instance.postgres_vm.psc_service_attachment_link
+  project               = google_compute_network.custom-vpc.project
+  name                  = var.webapp_endpoint_fwd_rule
+  target                = google_sql_database_instance.postgres_vm.psc_service_attachment_link
   network               = google_compute_network.custom-vpc.self_link
   subnetwork            = google_compute_subnetwork.webapp-subnet.id
   ip_address            = google_compute_address.endpoint_ip_addr.id
@@ -100,7 +102,7 @@ resource "google_compute_global_address" "psc_private_ip_alloc" {
   address_type  = var.psc_private_ip_alloc_addr_type
   prefix_length = var.psc_private_ip_alloc_prefix_length
   network       = google_compute_network.custom-vpc.id
-  depends_on = [ google_compute_network.custom-vpc ]
+  depends_on    = [google_compute_network.custom-vpc]
 }
 
 resource "google_service_networking_connection" "private_vpc_connection" {
@@ -149,9 +151,9 @@ resource "google_sql_database" "database" {
 }
 
 resource "google_sql_user" "db_user" {
-  name       = var.db_user_name
-  instance   = google_sql_database_instance.postgres_vm.name
-  password   = "${random_id.db_pswd.hex}"
+  name     = var.db_user_name
+  instance = google_sql_database_instance.postgres_vm.name
+  password = random_id.db_pswd.hex
 }
 
 resource "random_id" "db_pswd" {
@@ -175,8 +177,8 @@ locals {
 resource "google_compute_instance" "webapp-host" {
   machine_type = var.machine_type
   # name         = "${var.server_name}-${local.timestamp}"
-  name         = "${var.server_name}-cs8"
-  zone         = var.gcp_zone
+  name = "${var.server_name}-cs8"
+  zone = var.gcp_zone
   boot_disk {
     auto_delete = true
     device_name = var.server_name
@@ -184,8 +186,8 @@ resource "google_compute_instance" "webapp-host" {
     initialize_params {
       # image = "debian-cloud/debian-11"
       image = "projects/${var.project_id}/global/images/${var.image_id}"
-      size = var.disk_size
-      type = var.disk_type
+      size  = var.disk_size
+      type  = var.disk_type
     }
   }
   network_interface {
@@ -226,25 +228,26 @@ resource "google_compute_instance" "webapp-host" {
         sudo /opt/webapp/packer/setup_service.sh
         EOT
   }
-        # sudo echo "HOST=${google_sql_database_instance.ip_address.0.ip_address}" >> /opt/webapp/.env
+  # sudo echo "HOST=${google_sql_database_instance.ip_address.0.ip_address}" >> /opt/webapp/.env
   tags       = [var.network_tags]
   depends_on = [google_compute_network.custom-vpc, google_compute_subnetwork.webapp-subnet]
   service_account {
-    email  = google_service_account.webapp_service_account.email
+    email = google_service_account.webapp_service_account.email
     # scopes = ["logging-write","monitoring-read","monitoring-write"]
     scopes = [
-                  "https://www.googleapis.com/auth/logging.write",
-                  "https://www.googleapis.com/auth/monitoring.write"
-                  ]
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring.write",
+      "https://www.googleapis.com/auth/pubsub"
+    ]
   }
   allow_stopping_for_update = true
 }
 # ---------- # ---------- # ---------- # ---------- # ----------
 resource "google_dns_record_set" "routing_policy" {
-  project = var.project_id
-  name      = var.dns_zone_dns_name
-  type      = "A"
-  ttl       = 60  # Time to live in seconds
+  project      = var.project_id
+  name         = var.dns_zone_dns_name
+  type         = "A"
+  ttl          = var.routing_policy_ttl
   managed_zone = var.dns_zone_name
 
   rrdatas = [
@@ -254,13 +257,13 @@ resource "google_dns_record_set" "routing_policy" {
 }
 
 resource "google_service_account" "webapp_service_account" {
-  account_id   = "webapp-service-account-id"
-  display_name = "Webapp Service Account"
+  account_id   = var.webapp_service_account_id
+  display_name = var.webapp_service_account_name
 }
 
 resource "google_project_iam_binding" "log_admin" {
   project = var.project_id
-  role    = "roles/logging.admin"
+  role    = var.iam_binding_logging
 
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
@@ -269,12 +272,21 @@ resource "google_project_iam_binding" "log_admin" {
 
 resource "google_project_iam_binding" "metric_writer" {
   project = var.project_id
-  role    = "roles/monitoring.metricWriter"
+  role    = var.iam_binding_metric
 
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
   ]
 }
+resource "google_project_iam_binding" "pubsub_publisher" {
+  project = var.project_id
+  role    = "roles/pubsub.publisher"
+
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
+
 
 # ---------- # ---------- # ---------- # ---------- # ----------
 # Infra setup for Pub/Sub
@@ -282,21 +294,21 @@ resource "google_project_iam_binding" "metric_writer" {
 #
 # ---------- # ---------- # ---------- # ---------- # ----------
 resource "google_pubsub_topic" "trigger_email" {
-  name = "verify_email"
-  message_retention_duration = "604800s"
+  name                       = var.pubsub_topic
+  message_retention_duration = var.pubsub_topic_mrd
 }
 
 resource "google_pubsub_subscription" "check_user" {
-  name  = "check_user"
+  name  = var.pubsub_subscription
   topic = google_pubsub_topic.trigger_email.id
 
-  message_retention_duration = "7200s"
-  retain_acked_messages      = true
-  ack_deadline_seconds = 20
+  message_retention_duration = var.pubsub_subscription_mrd
+  retain_acked_messages      = var.retain_acked
+  ack_deadline_seconds       = var.ack_deadline
   retry_policy {
-    minimum_backoff = "10s"
+    minimum_backoff = var.retry_min
   }
-  enable_message_ordering    = false
+  enable_message_ordering = var.message_ordering
 }
 
 
@@ -317,47 +329,66 @@ resource "google_pubsub_subscription" "check_user" {
 # }
 
 resource "google_cloudfunctions_function" "email_verification" {
-  name        = "email_verification"
-  description = "Email Verification"
-  runtime     = "nodejs20"
+  name        = var.email_verification_name
+  runtime     = var.node_runtime
 
-  available_memory_mb   = 128
+  available_memory_mb   = 256
   source_archive_bucket = var.bucket_name
-  source_archive_object = "serverless.zip"
+  source_archive_object = var.source_archive_object
   event_trigger {
-    event_type = "google.pubsub.topic.publish"
-    resource= "projects/${var.project_id}/topics/${google_pubsub_topic.trigger_email.name}"
+    event_type = var.pubsub_trigger_event
+    resource   = google_pubsub_topic.trigger_email.name
+    //"projects/${var.project_id}/topics/${google_pubsub_topic.trigger_email.name}"
   }
-  entry_point           = "sendEmail.js"
+  entry_point = var.entry_point
+  timeout     = var.cloud_function_timeout
+
+  environment_variables = {
+    BUCKET_NAME = var.bucket_name
+    TOPIC_NAME  = google_pubsub_topic.trigger_email.name
+    DATABASE    = var.db_name
+    USERNAME    = google_sql_user.db_user.name
+    PASSWORD    = google_sql_user.db_user.password
+    HOST        = google_compute_address.endpoint_ip_addr.address
+    DIALECT     = var.db_dialect
+    DB_PORT     = var.db_port
+    API_KEY     = var.api_key
+    DOMAIN      = var.domain
+  }
+
+  service_account_email = google_service_account.webapp_service_account.email
+  vpc_connector         = google_vpc_access_connector.vpc_connector.name
 }
 
 resource "google_cloudfunctions_function_iam_binding" "func_binding" {
-  project = google_cloudfunctions_function.email_verification.project
-  region = google_cloudfunctions_function.email_verification.region
+  project        = google_cloudfunctions_function.email_verification.project
+  region         = google_cloudfunctions_function.email_verification.region
   cloud_function = google_cloudfunctions_function.email_verification.name
-  role = "roles/viewer"
+  role           = var.viewer_role
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
   ]
 }
 resource "google_pubsub_subscription_iam_binding" "pubsub_editor" {
   subscription = google_pubsub_subscription.check_user.name
-  role         = "roles/editor"
+  role         = var.editor_role
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
+    //, "serviceAccount:packer@dev-csye6225-414718.iam.gserviceaccount.com"
   ]
 }
 
 resource "google_pubsub_topic_iam_binding" "binding" {
   project = google_pubsub_topic.trigger_email.project
-  topic = google_pubsub_topic.trigger_email.name
-  role = "roles/viewer"
+  topic   = google_pubsub_topic.trigger_email.name
+  role    = var.viewer_role
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
+    //, "serviceAccount:packer@dev-csye6225-414718.iam.gserviceaccount.com"
   ]
 }
 
-resource "google_vpc_access_connector" "cloud_function_connector" {
+resource "google_vpc_access_connector" "vpc_connector" {
   name          = var.vpc_connector_name
   network       = google_compute_network.custom-vpc.self_link
   ip_cidr_range = var.ip_cidr_range
