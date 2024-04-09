@@ -411,6 +411,16 @@ variable "load_balancing_scheme" {
   default = "EXTERNAL"
 }
 
+variable "lb_ip_addr" {
+  type    = string
+  default = "lb-ip-addr"
+}
+
+variable "lb_ip_addr_type" {
+  type    = string
+  default = "EXTERNAL"
+}
+
 variable "backend_protocol" {
   type    = string
   default = "HTTP"
@@ -419,4 +429,157 @@ variable "backend_protocol" {
 variable "backend_port_name" {
   type    = string
   default = "http"
+}
+
+variable "proxy_only" {
+  type    = string
+  default = "proxy-only-subnet"
+}
+variable "proxy_cidr" {
+  type    = string
+  default = "10.129.0.0/24"
+}
+variable "lb_forwarding_rule" {
+  type    = string
+  default = "lb-fwd-rule"
+}
+variable "https_default_port" {
+  type    = string
+  default = "443"
+}
+variable "https_protocol" {
+  type    = string
+  default = "TCP"
+}
+variable "lb-firewall" {
+  type    = string
+  default = "lb-firewall"
+}
+variable "lb_firewall_port" {
+  type    = string
+  default = "8080"
+}
+variable "lb_firewall_protocol" {
+  type    = string
+  default = "tcp"
+}
+
+variable "pubsub_publisher" {
+  type    = string
+  default = "roles/pubsub.publisher"
+}
+
+variable "cloud_func_memory" {
+  type    = number
+  default = 256
+}
+
+variable "cloud_function_invoker" {
+  type    = string
+  default = "roles/cloudfunctions.invoker"
+}
+
+variable "cloud_sql_client" {
+  type    = string
+  default = "roles/cloudsql.client"
+}
+
+variable "compute_admin" {
+  type    = string
+  default = "roles/compute.admin"
+}
+
+variable "webapp_template" {
+  type    = string
+  default = "webapp-template"
+}
+
+variable "mig_mgr" {
+  type    = string
+  default = "mig-mgr"
+}
+
+variable "auto_healing_init_delay" {
+  type    = number
+  default = 300
+}
+
+variable "force_repair" {
+  type    = string
+  default = "NO"
+}
+
+variable "repair_on_failure" {
+  type    = string
+  default = "REPAIR"
+}
+
+variable "named_port_name" {
+  type    = string
+  default = "http"
+}
+
+variable "named_port" {
+  type    = string
+  default = "8080"
+}
+
+variable "webapp_autoscaler" {
+  type    = string
+  default = "webapp-autoscaler"
+}
+
+variable "auto_scaling_cooldown" {
+  type    = number
+  default = 60
+}
+
+variable "cpu_util" {
+  type    = number
+  default = 0.05
+}
+
+variable "http_health_check" {
+  type    = string
+  default = "http-health-check"
+}
+
+variable "hc_timeout_sec" {
+  type    = number
+  default = 20
+}
+
+variable "hc_check_interval_sec" {
+  type    = number
+  default = 30
+}
+
+variable "healthy_threshold" {
+  type    = number
+  default = 2
+}
+
+variable "unhealthy_threshold" {
+  type    = number
+  default = 2
+}
+
+variable "http_hc_port" {
+  type    = string
+  default = "8080"
+}
+
+variable "http_hc_port_name" {
+  type    = string
+  default = "http"
+}
+
+variable "http_hc_request_path" {
+  type    = string
+  default = "/healthz"
+}
+
+variable "http_hc_logging" {
+  type    = bool
+  default = true
 }

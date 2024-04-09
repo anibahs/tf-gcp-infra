@@ -38,12 +38,10 @@ resource "google_compute_subnetwork" "webapp-subnet" {
 }
 
 resource "google_compute_subnetwork" "proxy_only" {
-  name          = "proxy-only-subnet"
-  ip_cidr_range = "10.129.0.0/24"
+  name          = var.proxy_only
+  ip_cidr_range = var.proxy_cidr
   network       = google_compute_network.custom-vpc.id
-  # purpose       = "REGIONAL_MANAGED_PROXY"
   region        = var.gcp_region
-  # role          = "ACTIVE"
 }
 
 resource "google_compute_route" "network-route" {
@@ -55,46 +53,46 @@ resource "google_compute_route" "network-route" {
 }
 
 # enable ssh for demo
-resource "google_compute_firewall" "ssh_firewall" {
-  name    = var.firewall-name
-  network = google_compute_network.custom-vpc.name
-  source_ranges = ["35.235.240.0/20"]
-  # source_ranges = [var.public_gateway]
-  target_tags   = [var.network_tags]
+# resource "google_compute_firewall" "ssh_firewall" {
+#   name    = var.firewall-name
+#   network = google_compute_network.custom-vpc.name
+#   source_ranges = ["35.235.240.0/20"]
+#   # source_ranges = [var.public_gateway]
+#   target_tags   = [var.network_tags]
 
-  allow {
-    protocol = var.protocol
-    ports    = ["22"]
-    # ports = [var.app_port, var.public_port]
-  }
-  depends_on = [google_compute_network.custom-vpc]
-}
+#   allow {
+#     protocol = var.protocol
+#     ports    = ["22"]
+#     # ports = [var.app_port, var.public_port]
+#   }
+#   depends_on = [google_compute_network.custom-vpc]
+# }
 
 resource "google_compute_global_address" "lb_ip_addr" {
-  name         = "lb-ip-addr"
-  address_type = "EXTERNAL"
+  name         = var.lb_ip_addr
+  address_type = var.load_balancing_scheme
 }
 
 resource "google_compute_global_forwarding_rule" "lb_forwarding_rule" {
   project               = google_compute_network.custom-vpc.project
-  name                  = "lb-fwd-rule"
+  name                  = var.lb_forwarding_rule
   target                = google_compute_target_https_proxy.lb_target_proxy.self_link
-  port_range            = "443"
-  load_balancing_scheme = "EXTERNAL"
-  ip_protocol           = "TCP"
+  port_range            = var.https_default_port
+  load_balancing_scheme = var.load_balancing_scheme
+  ip_protocol           = var.https_protocol
   ip_address            = google_compute_global_address.lb_ip_addr.id
   depends_on = [ google_compute_global_address.lb_ip_addr ]
 }
 
 resource "google_compute_firewall" "lb-firewall" {
-  name    = "lb-firewall"
+  name    = var.lb-firewall
   network = google_compute_network.custom-vpc.self_link
   allow {
-    protocol = "tcp"
-    ports    = ["8080"]
+    protocol = var.lb_firewall_protocol
+    ports    = [var.lb_firewall_port]
   }
   source_ranges = [google_compute_subnetwork.proxy_only.ip_cidr_range, google_compute_global_forwarding_rule.lb_forwarding_rule.ip_address, "35.191.0.0/16", "130.211.0.0/22"]
-  target_tags = ["http-server"]
+  target_tags = [var.network_tags]
   depends_on = [ google_compute_global_forwarding_rule.lb_forwarding_rule ]
 }
 # ---------- # ---------- # ---------- # ---------- # ----------
@@ -114,7 +112,6 @@ resource "google_compute_firewall" "lb-firewall" {
 # 
 # 
 resource "google_compute_address" "endpoint_ip_addr" { # and forwarding rule from service Endpoint to IP Address 
-  # project      = google_compute_network.custom-vpc.project
   name         = var.endpoint_ip_addr_name
   region       = var.gcp_region
   address_type = var.endpoint_ip_addr_type
@@ -133,15 +130,6 @@ resource "google_compute_forwarding_rule" "endpoint" {
   load_balancing_scheme = ""
   depends_on            = [google_compute_address.endpoint_ip_addr, google_compute_network.custom-vpc, google_sql_database_instance.postgres_vm]
 }
-
-# resource "google_compute_global_forwarding_rule" "lb_internal_forwarding_rule" {
-#   project               = google_compute_network.custom-vpc.project
-#   name                  = "lb-fwd-rule"
-#   target                = google_sql_database_instance.postgres_vm.psc_service_attachment_link
-#   port_range            = "8080"
-#   load_balancing_scheme = "INTERNAL"
-#   ip_protocol           = "TCP"
-# }
 
 # Create an IP address
 resource "google_compute_global_address" "psc_private_ip_alloc" {
@@ -246,7 +234,7 @@ resource "google_project_iam_binding" "metric_writer" {
 
 resource "google_project_iam_binding" "pubsub_publisher" {
   project = var.project_id
-  role    = "roles/pubsub.publisher"
+  role    = var.pubsub_publisher
 
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
@@ -281,7 +269,7 @@ resource "google_cloudfunctions_function" "email_verification" {
   name    = var.email_verification_name
   runtime = var.node_runtime
 
-  available_memory_mb   = 256
+  available_memory_mb   = var.cloud_func_memory
   source_archive_bucket = var.bucket_name
   source_archive_object = var.source_archive_object
   event_trigger {
@@ -351,9 +339,9 @@ resource "google_vpc_access_connector" "vpc_connector" {
 # ---------- # ---------- # ---------- # ---------- # ----------
 
 # IAM binding on the service account used by Cloud Functions
-resource "google_project_iam_binding" "cloud_function_token_creator_binding" {
+resource "google_project_iam_binding" "cloud_function_invoker" {
   project = var.project_id
-  role    = "roles/cloudfunctions.invoker"
+  role    = var.cloud_function_invoker
 
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
@@ -362,7 +350,7 @@ resource "google_project_iam_binding" "cloud_function_token_creator_binding" {
 
 resource "google_project_iam_binding" "cloudsql_client_binding" {
   project = var.project_id
-  role    = "roles/cloudsql.client"
+  role    = var.cloud_sql_client
 
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
@@ -371,7 +359,7 @@ resource "google_project_iam_binding" "cloudsql_client_binding" {
 
 resource "google_project_iam_binding" "disk_admin_binding" {
   project = var.project_id
-  role    = "roles/compute.admin"
+  role    = var.compute_admin
 
   members = [
     "serviceAccount:${google_service_account.webapp_service_account.email}"
@@ -380,7 +368,7 @@ resource "google_project_iam_binding" "disk_admin_binding" {
 
 # Infra
 resource "google_compute_region_instance_template" "webapp_template" {
-  name         = "webapp-template"
+  name         = var.webapp_template
   machine_type = var.machine_type
 
   disk {
@@ -433,11 +421,6 @@ resource "google_compute_region_instance_template" "webapp_template" {
   service_account {
     email  = google_service_account.webapp_service_account.email
     scopes = ["logging-write", "monitoring-read", "monitoring-write", "cloud-platform"]
-    # scopes = [
-    #   "https://www.googleapis.com/auth/logging.write",
-    #   "https://www.googleapis.com/auth/monitoring.write",
-    #   "https://www.googleapis.com/auth/pubsub",
-    # ]
   }
 
   depends_on = [
@@ -453,7 +436,7 @@ resource "google_compute_region_instance_template" "webapp_template" {
 }
 
 resource "google_compute_region_instance_group_manager" "mig_mgr" {
-  name                      = "mig-mgr"
+  name                      = var.mig_mgr
   region                    = var.gcp_region
   distribution_policy_zones = [var.gcp_zone, var.gcp_zone_c, var.gcp_zone_d]
   base_instance_name        = var.server_name
@@ -462,31 +445,31 @@ resource "google_compute_region_instance_group_manager" "mig_mgr" {
   }
   auto_healing_policies {
     health_check      = google_compute_health_check.http-health-check.self_link
-    initial_delay_sec = 300
+    initial_delay_sec = var.auto_healing_init_delay
   }
   instance_lifecycle_policy {
-    force_update_on_repair    = "NO"
-    default_action_on_failure = "REPAIR"
+    force_update_on_repair    = var.force_repair
+    default_action_on_failure = var.repair_on_failure
   }
   named_port {
-    name = "http"
-    port = "8080"
+    name = var.named_port_name
+    port = var.named_port
   }
   depends_on = [ google_compute_region_instance_template.webapp_template ]
 }
 
 resource "google_compute_region_autoscaler" "webapp_autoscaler" {
-  name   = "webapp-autoscaler"
+  name   = var.webapp_autoscaler
   region = var.gcp_region
   target = google_compute_region_instance_group_manager.mig_mgr.id
 
   autoscaling_policy {
     max_replicas    = 2 * var.instance_count
     min_replicas    = var.instance_count
-    cooldown_period = 60
+    cooldown_period = var.auto_scaling_cooldown
 
     cpu_utilization {
-      target = 0.05
+      target = var.cpu_util
     }
   }
   depends_on = [google_compute_region_instance_group_manager.mig_mgr]
@@ -494,20 +477,20 @@ resource "google_compute_region_autoscaler" "webapp_autoscaler" {
 
 # Load balancing
 resource "google_compute_health_check" "http-health-check" {
-  name = "http-health-check"
+  name = var.http_health_check
 
-  timeout_sec         = 20
-  check_interval_sec  = 30
-  healthy_threshold   = 2
-  unhealthy_threshold = 2
+  timeout_sec         = var.hc_check_interval_sec
+  check_interval_sec  = var.hc_check_interval_sec
+  healthy_threshold   = var.healthy_threshold
+  unhealthy_threshold = var.unhealthy_threshold
 
   http_health_check {
-    port         = "8080"
-    port_name    = "http"
-    request_path = "/healthz"
+    port         = var.http_hc_port
+    port_name    = var.http_hc_port_name
+    request_path = var.http_hc_request_path
   }
   log_config {
-    enable = true
+    enable = var.http_hc_logging
   }
 }
 
