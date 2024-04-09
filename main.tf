@@ -464,8 +464,8 @@ resource "google_compute_region_autoscaler" "webapp_autoscaler" {
   target = google_compute_region_instance_group_manager.mig_mgr.id
 
   autoscaling_policy {
-    max_replicas    = 2 * var.instance_count
-    min_replicas    = var.instance_count
+    max_replicas    = var.max_instance_count
+    min_replicas    = var.min_instance_count
     cooldown_period = var.auto_scaling_cooldown
 
     cpu_utilization {

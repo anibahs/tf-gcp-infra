@@ -372,9 +372,14 @@ variable "iam_binding_metric" {
   default = "roles/monitoring.metricWriter"
 }
 
-variable "instance_count" {
+variable "min_instance_count" {
   type    = number
   default = 3
+}
+
+variable "max_instance_count" {
+  type    = number
+  default = 6
 }
 
 variable "network_prefix" {
