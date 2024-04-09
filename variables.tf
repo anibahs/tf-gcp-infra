@@ -8,6 +8,16 @@ variable "gcp_zone" {
   type        = string
   default     = "us-east1-b"
 }
+variable "gcp_zone_c" {
+  description = "GCP zone"
+  type        = string
+  default     = "us-east1-c"
+}
+variable "gcp_zone_d" {
+  description = "GCP zone"
+  type        = string
+  default     = "us-east1-d"
+}
 variable "project_id" {
   description = "project_id"
   type        = string
@@ -261,7 +271,7 @@ variable "domain" {
 
 variable "email_verification_name" {
   type    = string
-  default = "email_verification"
+  default = "email-verification"
 }
 
 
@@ -312,7 +322,7 @@ variable "pubsub_topic_mrd" {
 
 variable "pubsub_subscription" {
   type    = string
-  default = "check_user"
+  default = "check-user"
 }
 
 variable "pubsub_subscription_mrd" {
@@ -360,4 +370,53 @@ variable "iam_binding_logging" {
 variable "iam_binding_metric" {
   type    = string
   default = "roles/monitoring.metricWriter"
+}
+
+variable "instance_count" {
+  type    = number
+  default = 3
+}
+
+variable "network_prefix" {
+  type    = string
+  default = "mig-lb-https"
+}
+
+variable "ssl_cert" {
+  type    = string
+  default = "lb-ssl-cert"
+}
+
+variable "ssl_cert_domains" {
+  default = ["anibahscsye6225.me"]
+}
+
+variable "lb_https_proxy" {
+  type    = string
+  default = "lb-https-proxy"
+}
+
+variable "lb_mapping" {
+  type    = string
+  default = "lb-mapping"
+}
+
+variable "webapp_backend_service" {
+  type    = string
+  default = "webapp-backend-service"
+}
+
+variable "load_balancing_scheme" {
+  type    = string
+  default = "EXTERNAL"
+}
+
+variable "backend_protocol" {
+  type    = string
+  default = "HTTP"
+}
+
+variable "backend_port_name" {
+  type    = string
+  default = "http"
 }
