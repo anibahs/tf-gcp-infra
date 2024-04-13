@@ -12,6 +12,8 @@
   - Cloud DNS API
   - Cloud Logging API
   - Stackdriver Monitoring API
+  - 
+Cloud Key Management Service (KMS) API
 
 ## Infrastructure deployment
 - Clone repository 

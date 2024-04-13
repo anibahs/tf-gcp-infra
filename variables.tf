@@ -247,7 +247,7 @@ variable "routing_policy_ttl" {
 
 variable "bucket_name" {
   type    = string
-  default = "dev-csye6225-func-bucket"
+  default = "dev-csye6225-func-bucket-us"
 }
 
 variable "vpc_connector_name" {
@@ -587,4 +587,29 @@ variable "http_hc_request_path" {
 variable "http_hc_logging" {
   type    = bool
   default = true
+}
+
+variable "key_binding" {
+  type    = string
+  default = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
+}
+
+variable "rotation_period" {
+  type    = string
+  default = "2592000s"
+}
+
+variable "cloudfunction_service_account_id" {
+  type    = string
+  default = "cloudfunc-service-account-id"
+}
+
+variable "cloudfunction_service_account_name" {
+  type    = string
+  default = "Cloud Function Service Account"
+}
+
+variable "kms_admin_role" {
+  type    = string
+  default = "roles/cloudkms.admin"
 }

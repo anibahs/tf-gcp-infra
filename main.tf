@@ -81,7 +81,7 @@ resource "google_compute_global_forwarding_rule" "lb_forwarding_rule" {
   load_balancing_scheme = var.load_balancing_scheme
   ip_protocol           = var.https_protocol
   ip_address            = google_compute_global_address.lb_ip_addr.id
-  depends_on = [ google_compute_global_address.lb_ip_addr ]
+  depends_on            = [google_compute_global_address.lb_ip_addr]
 }
 
 resource "google_compute_firewall" "lb-firewall" {
@@ -92,8 +92,11 @@ resource "google_compute_firewall" "lb-firewall" {
     ports    = [var.lb_firewall_port]
   }
   source_ranges = [google_compute_subnetwork.proxy_only.ip_cidr_range, google_compute_global_forwarding_rule.lb_forwarding_rule.ip_address, "35.191.0.0/16", "130.211.0.0/22"]
-  target_tags = [var.network_tags]
-  depends_on = [ google_compute_global_forwarding_rule.lb_forwarding_rule ]
+  target_tags   = [var.network_tags]
+  depends_on    = [
+    google_compute_global_forwarding_rule.lb_forwarding_rule, 
+    google_compute_global_address.lb_ip_addr
+    ]
 }
 # ---------- # ---------- # ---------- # ---------- # ----------
 
@@ -149,6 +152,13 @@ resource "google_service_networking_connection" "private_vpc_connection" {
   depends_on              = [google_compute_global_address.psc_private_ip_alloc, google_compute_network.custom-vpc]
 }
 
+
+resource "google_project_service_identity" "gcp_sa_cloud_sql" {
+  provider = google-beta
+  service  = "sqladmin.googleapis.com"
+  project = var.project_id
+}
+
 resource "random_id" "db_name_suffix" {
   byte_length = 4
 }
@@ -158,7 +168,8 @@ resource "google_sql_database_instance" "postgres_vm" {
   region              = var.gcp_region
   database_version    = var.database_version
   deletion_protection = var.deletion_protection
-
+  encryption_key_name = data.google_kms_crypto_key.sql-key.id
+  
   # make instance in private service connection
   # psc defaults to auto generated subnet, dns zone, and 
   # connects to forwarding rule
@@ -179,6 +190,7 @@ resource "google_sql_database_instance" "postgres_vm" {
       binary_log_enabled = var.binary_logging_disable
     }
   }
+  depends_on = [ google_project_service_identity.gcp_sa_cloud_sql,google_kms_crypto_key_iam_binding.sql-key-binding ]
 }
 
 resource "google_sql_database" "database" {
@@ -196,7 +208,9 @@ resource "google_sql_user" "db_user" {
 resource "random_id" "db_pswd" {
   byte_length = 8
 }
+
 # ---------- # ---------- # ---------- # ---------- # ----------
+
 resource "google_dns_record_set" "routing_policy" {
   project      = var.project_id
   name         = var.dns_zone_dns_name
@@ -206,7 +220,10 @@ resource "google_dns_record_set" "routing_policy" {
   rrdatas = [
     google_compute_global_forwarding_rule.lb_forwarding_rule.ip_address
   ]
-  depends_on = [ google_compute_global_forwarding_rule.lb_forwarding_rule ]
+  depends_on = [
+    google_compute_global_forwarding_rule.lb_forwarding_rule, 
+    google_compute_global_address.lb_ip_addr
+    ]
 }
 
 resource "google_service_account" "webapp_service_account" {
@@ -247,6 +264,11 @@ resource "google_project_iam_binding" "pubsub_publisher" {
 # Includes pub sub topic, subscription, cloud function
 #
 # ---------- # ---------- # ---------- # ---------- # ----------
+resource "google_service_account" "cloudfunction_service_account" {
+  account_id   = var.cloudfunction_service_account_id
+  display_name = var.cloudfunction_service_account_name
+}
+
 resource "google_pubsub_topic" "trigger_email" {
   name                       = var.pubsub_topic
   message_retention_duration = var.pubsub_topic_mrd
@@ -263,6 +285,27 @@ resource "google_pubsub_subscription" "check_user" {
     minimum_backoff = var.retry_min
   }
   enable_message_ordering = var.message_ordering
+}
+
+resource "google_storage_bucket" "dev-csye6225-func-bucket-us" {
+  name          = var.bucket_name
+  project       = var.project_id
+  location      = var.gcp_region
+  encryption {
+   default_kms_key_name = data.google_kms_crypto_key.storage-key.id
+  }
+  force_destroy = true
+  depends_on = [google_kms_crypto_key_iam_binding.storage-key-binding]
+}
+
+resource "google_storage_bucket_object" "serverless_zip" {
+  name   = var.source_archive_object
+  source = "./../${var.source_archive_object}"
+  bucket = google_storage_bucket.dev-csye6225-func-bucket-us.name
+  depends_on = [ google_storage_bucket.dev-csye6225-func-bucket-us ]
+}
+
+data "google_storage_project_service_account" "bucket_service_account" {
 }
 
 resource "google_cloudfunctions_function" "email_verification" {
@@ -293,8 +336,9 @@ resource "google_cloudfunctions_function" "email_verification" {
     DOMAIN      = var.domain
   }
 
-  service_account_email = google_service_account.webapp_service_account.email
+  service_account_email = google_service_account.cloudfunction_service_account.email
   vpc_connector         = google_vpc_access_connector.vpc_connector.name
+  depends_on = [ google_storage_bucket_object.serverless_zip, google_storage_bucket.dev-csye6225-func-bucket-us ]
 }
 
 resource "google_cloudfunctions_function_iam_binding" "func_binding" {
@@ -303,7 +347,7 @@ resource "google_cloudfunctions_function_iam_binding" "func_binding" {
   cloud_function = google_cloudfunctions_function.email_verification.name
   role           = var.viewer_role
   members = [
-    "serviceAccount:${google_service_account.webapp_service_account.email}"
+    "serviceAccount:${google_service_account.cloudfunction_service_account.email}"
   ]
 }
 
@@ -311,7 +355,7 @@ resource "google_pubsub_subscription_iam_binding" "pubsub_editor" {
   subscription = google_pubsub_subscription.check_user.name
   role         = var.editor_role
   members = [
-    "serviceAccount:${google_service_account.webapp_service_account.email}"
+    "serviceAccount:${google_service_account.cloudfunction_service_account.email}"
   ]
 }
 
@@ -320,7 +364,7 @@ resource "google_pubsub_topic_iam_binding" "binding" {
   topic   = google_pubsub_topic.trigger_email.name
   role    = var.viewer_role
   members = [
-    "serviceAccount:${google_service_account.webapp_service_account.email}"
+    "serviceAccount:${google_service_account.cloudfunction_service_account.email}"
   ]
 }
 
@@ -344,7 +388,7 @@ resource "google_project_iam_binding" "cloud_function_invoker" {
   role    = var.cloud_function_invoker
 
   members = [
-    "serviceAccount:${google_service_account.webapp_service_account.email}"
+    "serviceAccount:${google_service_account.cloudfunction_service_account.email}"
   ]
 }
 
@@ -353,7 +397,7 @@ resource "google_project_iam_binding" "cloudsql_client_binding" {
   role    = var.cloud_sql_client
 
   members = [
-    "serviceAccount:${google_service_account.webapp_service_account.email}"
+    "serviceAccount:${google_service_account.cloudfunction_service_account.email}"
   ]
 }
 
@@ -362,21 +406,27 @@ resource "google_project_iam_binding" "disk_admin_binding" {
   role    = var.compute_admin
 
   members = [
-    "serviceAccount:${google_service_account.webapp_service_account.email}"
+    "serviceAccount:${google_service_account.cloudfunction_service_account.email}"
   ]
 }
-
+locals {
+  timestamp = formatdate("MMDDhhmmss", timestamp())
+}
 # Infra
 resource "google_compute_region_instance_template" "webapp_template" {
-  name         = var.webapp_template
+  # name         = var.webapp_template
+  name         = "${var.webapp_template}-${local.timestamp}"
   machine_type = var.machine_type
-
+  
   disk {
     auto_delete  = true
     device_name  = var.server_name
     source_image = "projects/${var.project_id}/global/images/${var.image_id}"
     disk_size_gb = var.disk_size
     disk_type    = var.disk_type
+    disk_encryption_key {
+      kms_key_self_link = data.google_kms_crypto_key.vm-key.id
+    }
   }
 
   network_interface {
@@ -455,7 +505,7 @@ resource "google_compute_region_instance_group_manager" "mig_mgr" {
     name = var.named_port_name
     port = var.named_port
   }
-  depends_on = [ google_compute_region_instance_template.webapp_template ]
+  depends_on = [google_compute_region_instance_template.webapp_template]
 }
 
 resource "google_compute_region_autoscaler" "webapp_autoscaler" {
@@ -527,3 +577,133 @@ resource "google_compute_target_https_proxy" "lb_target_proxy" {
     google_compute_managed_ssl_certificate.lb_ssl_certificate.id
   ]
 }
+# ---------- # ---------- # ---------- # ---------- # ----------
+
+# ---------- # ---------- # ---------- # ---------- # ----------
+# CMEK
+# 
+#
+# ---------- # ---------- # ---------- # ---------- # ----------
+#
+#
+#
+#
+
+# data "google_kms_key_ring" "keyring" {
+#   name     = "keyring"
+#   location = "global"
+# }
+
+# resource "google_kms_key_ring" "keyring-us" {
+#   name     = "keyring"
+#   location = var.gcp_region
+# }
+
+data "google_kms_key_ring" "keyring-us" {
+  name     = "keyring"
+  location = var.gcp_region
+}
+
+data "google_kms_crypto_key" "storage-key" {
+  key_ring        = data.google_kms_key_ring.keyring-us.id
+  name            = "storage-key"
+  depends_on = [data.google_kms_key_ring.keyring-us]
+}
+
+data "google_kms_crypto_key" "sql-key" {
+  key_ring        = data.google_kms_key_ring.keyring-us.id
+  name            = "sql-key"
+  depends_on = [data.google_kms_key_ring.keyring-us]
+}
+
+data "google_kms_crypto_key" "vm-key" {
+  key_ring        = data.google_kms_key_ring.keyring-us.id
+  name            = "vm-key"
+  depends_on = [data.google_kms_key_ring.keyring-us]
+}
+
+# resource "google_kms_crypto_key" "vm-key" {
+#   name            = "vm-key"
+#   key_ring        = data.google_kms_key_ring.keyring-us.id
+#   rotation_period = var.rotation_period
+
+#   lifecycle {
+#     prevent_destroy = false
+#   }
+#   depends_on = [data.google_kms_key_ring.keyring-us]
+# }
+
+# resource "google_kms_crypto_key" "sql-key" {
+#   name            = "sql-key"
+#   key_ring        = data.google_kms_key_ring.keyring-us.id
+#   rotation_period = var.rotation_period
+
+#   lifecycle {
+#     prevent_destroy = false
+#   }
+#   depends_on = [data.google_kms_key_ring.keyring-us]
+# }
+
+# resource "google_kms_crypto_key" "storage-key" {
+#   name            = "storage-key"
+#   key_ring        = data.google_kms_key_ring.keyring-us.id
+#   rotation_period = var.rotation_period
+
+#   lifecycle {
+#     prevent_destroy = false
+#   }
+#   depends_on = [data.google_kms_key_ring.keyring-us]
+# }
+
+resource "google_kms_key_ring_iam_binding" "keyring-binding" {
+  key_ring_id = data.google_kms_key_ring.keyring-us.id
+  role          = var.kms_admin_role
+
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}",
+    //"serviceAccount:${data.google_storage_project_service_account.bucket_service_account.email_address}"
+  ]
+}
+
+resource "google_kms_crypto_key_iam_binding" "vm-key-binding" {
+  crypto_key_id = data.google_kms_crypto_key.vm-key.id
+  role          = var.key_binding
+
+  members = [
+    "serviceAccount:${google_service_account.webapp_service_account.email}"
+  ]
+}
+
+resource "google_kms_crypto_key_iam_binding" "sql-key-binding" {
+  crypto_key_id = data.google_kms_crypto_key.sql-key.id
+  role          = var.key_binding
+
+  members = [
+    //"serviceAccount:${google_sql_database_instance.postgres_vm.service_account_email_address}",
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
+  ]
+}
+
+resource "google_project_iam_binding" "project" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+
+  members = [
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
+  ]
+}
+
+
+resource "google_kms_crypto_key_iam_binding" "storage-key-binding" {
+  crypto_key_id = data.google_kms_crypto_key.storage-key.id
+  role          = var.key_binding
+
+  members = [
+    # "serviceAccount:${google_service_account.webapp_service_account.email}",
+    # "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+    "serviceAccount:${data.google_storage_project_service_account.bucket_service_account.email_address}"
+  ]
+}
+
+
+
