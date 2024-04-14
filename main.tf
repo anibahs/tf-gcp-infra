@@ -57,15 +57,12 @@ resource "google_compute_route" "network-route" {
 #   name    = var.firewall-name
 #   network = google_compute_network.custom-vpc.name
 #   source_ranges = ["35.235.240.0/20"]
-#   # source_ranges = [var.public_gateway]
 #   target_tags   = [var.network_tags]
 
 #   allow {
 #     protocol = var.protocol
 #     ports    = ["22"]
-#     # ports = [var.app_port, var.public_port]
 #   }
-#   depends_on = [google_compute_network.custom-vpc]
 # }
 
 resource "google_compute_global_address" "lb_ip_addr" {
@@ -689,7 +686,8 @@ resource "google_project_iam_binding" "project" {
   role    = "roles/iam.serviceAccountUser"
 
   members = [
-    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}"
+    "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
+    "serviceAccount:packer@dev-csye6225-414718.iam.gserviceaccount.com"
   ]
 }
 
@@ -699,8 +697,6 @@ resource "google_kms_crypto_key_iam_binding" "storage-key-binding" {
   role          = var.key_binding
 
   members = [
-    # "serviceAccount:${google_service_account.webapp_service_account.email}",
-    # "serviceAccount:${google_project_service_identity.gcp_sa_cloud_sql.email}",
     "serviceAccount:${data.google_storage_project_service_account.bucket_service_account.email_address}"
   ]
 }

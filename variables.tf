@@ -556,7 +556,7 @@ variable "hc_timeout_sec" {
 
 variable "hc_check_interval_sec" {
   type    = number
-  default = 30
+  default = 60
 }
 
 variable "healthy_threshold" {
@@ -566,7 +566,7 @@ variable "healthy_threshold" {
 
 variable "unhealthy_threshold" {
   type    = number
-  default = 2
+  default = 4
 }
 
 variable "http_hc_port" {
